@@ -32,7 +32,7 @@ const initMinecraftBot = () => {
   const mcBot = mineflayer.createBot({
     host: process.env.MC_HOST || 'in02.servoid.pro',
     port: parseInt(process.env.MC_PORT || '8641'),
-    username: 'DiscordBot',
+    username: 'Havaldaar',
     auth: 'offline',
     version: process.env.MC_VERSION || false
   });
