@@ -12,7 +12,9 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.DirectMessages
   ]
 });
 
@@ -26,9 +28,8 @@ const initMinecraftBot = () => {
   const mcBot = mineflayer.createBot({
     host: process.env.MC_HOST || 'in02.servoid.pro',
     port: parseInt(process.env.MC_PORT || '8641'),
-    username: process.env.MC_USERNAME,
-    password: process.env.MC_PASSWORD,
-    auth: process.env.MC_AUTH || 'microsoft',
+    username: 'DiscordBot',
+    auth: 'offline',
     version: process.env.MC_VERSION || false
   });
 
