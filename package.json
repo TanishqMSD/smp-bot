@@ -1,0 +1,14 @@
+{
+  "name": "minecraft-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Minecraft server monitoring and management",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.11.0",
+    "mineflayer": "^4.10.0",
+    "dotenv": "^16.3.1"
+  }
+}
