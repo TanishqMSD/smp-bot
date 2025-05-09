@@ -1,9 +1,13 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ActivityType } = require('discord.js');
 const mineflayer = require('mineflayer');
+const http = require('http');
+const https = require('https');
 
 // Configuration constants
 const MC_CHAT_CHANNEL = 'minecraft-chat';
+const RENDER_URL = 'https://smp-bot-8k1e.onrender.com';
+const PING_INTERVAL = 2 * 60 * 1000; // 2 minutes in milliseconds
 let lastHealthCheck = Date.now();
 let isServerOnline = false;
 
@@ -173,9 +177,35 @@ function updateBotStatus() {
 }
 
 // Discord bot event handlers
+// Create HTTP server to handle incoming requests
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Bot is alive!');
+});
+
+// Start the server
+server.listen(process.env.PORT || 3000, () => {
+  console.log(`HTTP server is running on port ${process.env.PORT || 3000}`);
+});
+
+// Function to ping the Render deployment
+function pingServer() {
+  https.get(RENDER_URL, (res) => {
+    console.log('Ping successful, status:', res.statusCode);
+  }).on('error', (err) => {
+    console.error('Ping failed:', err.message);
+  });
+}
+
+// Start periodic pinging
+setInterval(pingServer, PING_INTERVAL);
+
 client.on('ready', () => {
   console.log(`Discord bot logged in as ${client.user.tag}`);
   client.user.setActivity('Starting up...', { type: ActivityType.Playing });
+  
+  // Initial ping
+  pingServer();
 });
 
 client.on('messageCreate', async (message) => {
