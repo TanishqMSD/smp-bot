@@ -44,7 +44,7 @@ const initMinecraftBot = () => {
     if (channel) {
       const embed = new EmbedBuilder()
         .setTitle('Server Connection Established')
-        .setDescription(`Connected to ${process.env.MC_HOST || 'in02.servoid.pro'}:${process.env.MC_PORT || '8641'}`)
+        .setDescription(`Connected to Oggy's SMP server`)
         .setColor('#00ff00')
         .setTimestamp();
       
