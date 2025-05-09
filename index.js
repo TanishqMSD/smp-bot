@@ -34,7 +34,11 @@ const initMinecraftBot = () => {
     port: parseInt(process.env.MC_PORT || '8641'),
     username: 'Havaldaar',
     auth: 'offline',
-    version: process.env.MC_VERSION || false
+    version: process.env.MC_VERSION || false,
+    hideErrors: true,
+    skipValidation: true,
+    viewDistance: 'tiny',
+    hideInTabList: true
   });
 
   // Minecraft bot event handlers
@@ -74,6 +78,9 @@ const initMinecraftBot = () => {
   });
 
   mcBot.on('playerJoined', (player) => {
+    // Don't send message if it's the bot itself
+    if (player.username === mcBot.username) return;
+    
     const channel = client.channels.cache.find(ch => ch.name === MC_CHAT_CHANNEL);
     if (channel) {
       channel.send(`🟢 **${player.username}** joined the game`);
@@ -81,6 +88,9 @@ const initMinecraftBot = () => {
   });
 
   mcBot.on('playerLeft', (player) => {
+    // Don't send message if it's the bot itself
+    if (player.username === mcBot.username) return;
+    
     const channel = client.channels.cache.find(ch => ch.name === MC_CHAT_CHANNEL);
     if (channel) {
       channel.send(`🔴 **${player.username}** left the game`);
