@@ -214,7 +214,7 @@ client.on('messageCreate', async (message) => {
           .setTitle('Minecraft Server Status')
           .setColor(isServerOnline ? '#00ff00' : '#ff0000')
           .addFields(
-            { name: 'Server', value: `${process.env.MC_HOST || 'in02.servoid.pro'}:${process.env.MC_PORT || '8641'}` },
+            { name: 'Server', value: `Oggy's SMP Server` },
             { name: 'Status', value: isServerOnline ? '🟢 Online' : '🔴 Offline' },
             { name: `Players Online (${playerCount})`, value: playerList }
           )
