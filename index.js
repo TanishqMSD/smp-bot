@@ -7,7 +7,7 @@ const https = require('https');
 // Configuration constants
 const MC_CHAT_CHANNEL = 'minecraft-chat';
 const RENDER_URL = 'https://smp-bot-8k1e.onrender.com';
-const PING_INTERVAL = 2 * 60 * 1000; // 2 minutes in milliseconds
+const PING_INTERVAL = 2 * 60 * 1000; // 2 minutes
 let lastHealthCheck = Date.now();
 let isServerOnline = false;
 
@@ -221,11 +221,11 @@ client.on('ready', () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // Get the Minecraft chat channel
-  const minecraftChannel = client.channels.cache.find(ch => ch.name === MC_CHAT_CHANNEL);
-  
-  // Forward Discord messages to Minecraft (if in the minecraft-chat channel)
-  if (message.channel.name === MC_CHAT_CHANNEL && !message.content.startsWith('!mc')) {
+  // Only process messages from the minecraft-chat channel
+  if (message.channel.name !== MC_CHAT_CHANNEL) return;
+
+  // Forward non-command messages to Minecraft
+  if (!message.content.startsWith('!mc')) {
     if (bot && bot.entity) {
       bot.chat(`[Discord] ${message.author.username}: ${message.content}`);
     }
@@ -284,7 +284,7 @@ client.on('messageCreate', async (message) => {
         const text = args.join(' ');
         if (!text) return message.reply('Please provide a message to send.');
         
-        bot.chat(text);
+        bot.chat(`[Discord] ${message.author.username}: ${text}`);
         message.react('✅');
         break;
 
