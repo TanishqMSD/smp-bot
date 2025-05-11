@@ -241,8 +241,7 @@ client.on('messageCreate', async (message) => {
       console.error('Failed to delete message:', error);
     }
 
-    const args = message.content.slice(7).trim().split(/ +/);
-    const tellText = args.join(' ');
+    const tellText = message.content.slice('!mc tell'.length).trim();
     if (!tellText) {
       try {
         const errorMsg = await message.channel.send('Please provide a message to send.');
