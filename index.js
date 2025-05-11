@@ -253,9 +253,16 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // Send the message to the Discord channel
+    // Send the message to the Discord channel as an embed
     try {
-      await message.channel.send(tellText);
+      const tellEmbed = new EmbedBuilder()
+        .setTitle('Oggy House Minecraft SMP')
+        .setDescription(tellText)
+        .setColor('#0099ff')
+        .setTimestamp()
+        .setFooter({ text: 'May your adventures be epic and your builds legendary! 🎮' });
+
+      await message.channel.send({ embeds: [tellEmbed] });
     } catch (error) {
       console.error('Failed to send message to Discord:', error);
       const errorMsg = await message.channel.send('⚠️ Failed to send message.');
