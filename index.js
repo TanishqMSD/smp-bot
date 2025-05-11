@@ -270,7 +270,72 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // Only process commands in minecraft-chat channel except for tell command
+  // Only process commands in minecraft-chat channel except for tell and rules commands
+  if (message.content.startsWith('!mc rules')) {
+    // Handle rules command here
+    const args = message.content.slice(3).trim().split(/ +/);
+    const command = args.shift().toLowerCase();
+    
+    if (command === 'rules') {
+      // Check if user has permission
+      if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+        try {
+          const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+          setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+        } catch (error) {
+          console.error('Failed to send error message:', error);
+        }
+        return;
+      }
+
+      // Delete the command message immediately
+      try {
+        await message.delete();
+      } catch (error) {
+        console.error('Failed to delete message:', error);
+      }
+
+      const rulesEmbed = new EmbedBuilder()
+        .setTitle('📢 Server Rules & Guidelines – Please Read! 📢')
+        .setColor('#ff6b6b')
+        .setDescription('Hey @Cockroach Party! 👋🏻\nWelcome to our smp! To keep everything fun, fair, and sustainable, we have a few important rules that all members must follow to stay in the community and enjoy gameplay. Please read carefully:\n\nDo NOT spam whitelist requests during live streams – Messages like "whitelist me" will be deleted. Repeated offenses may lead to a mute or ban. Be patient and respectful.')
+        .addFields(
+          {
+            name: '💰 SERVER ACCESS FEE',
+            value: 'This is a paid server with limited resources.\n\n'
+              + 'Every member must pay ₹1 per day to maintain access.\n\n'
+              + 'Payments can be made in advance (e.g., ₹30 for a month).\n\n'
+              + 'Non-payment will result in a temporary suspension until dues are cleared.\n\n'
+              + 'If you\'re unable to pay for any reason, please contact an admin before missing your payment.\n\n'
+              + '⚠️ Please note: If you are banned from the server for breaking the rules, no refunds will be provided under any circumstances.'
+          },
+          {
+            name: '🎮 IN-GAME RULES',
+            value: 'No cheating or hacking – Use of third-party tools or exploits will result in an immediate ban.\n\n'
+              + 'No griefing or trolling – Don\'t ruin others\' experience (e.g., stealing, destroying builds, baiting).\n\n'
+              + 'No personal builds near spawn or the main SMP area – These are reserved for community use. Build your personal base at a reasonable distance.\n\n'
+              + 'Play fair and team up respectfully – Collaborate, don\'t dominate.\n\n'
+              + 'Use proper channels for voice/text – Stick to designated channels for in-game discussion, support, and off-topic chat.'
+          },
+          {
+            name: '📢 IMPORTANT NOTES',
+            value: 'Rule violations may result in a warning, mute, kick, or permanent ban, depending on severity.\n\n'
+              + 'If you see someone breaking the rules, report it privately to a mod or admin.\n\n'
+              + 'Let\'s keep this a friendly, safe, and fun community for everyone!\n\n'
+              + '✅ By staying in this server, you agree to follow all rules, including the daily access fee and no-refund policy for bans.\n\n'
+              + 'If you have any questions or need help with payment, whitelisting, or anything else, feel free to reach out to a mod or admin.\n\n'
+              + 'Thanks for being here – and happy gaming! 🎮✨ @everyone @here @Minecraft'
+          }
+        )
+        .setTimestamp()
+        .setFooter({ text: 'Oggy\'s House SMP' });
+
+      message.channel.send({ embeds: [rulesEmbed] });
+      return;
+    }
+  }
+
+  // Only process other commands in minecraft-chat channel
   if (message.channel.name !== MC_CHAT_CHANNEL) {
     return;
   }
@@ -484,39 +549,33 @@ client.on('messageCreate', async (message) => {
         const rulesEmbed = new EmbedBuilder()
           .setTitle('📢 Server Rules & Guidelines – Please Read! 📢')
           .setColor('#ff6b6b')
-          .setDescription('Hey everyone! 👋\nWelcome to our server! To keep everything fun, fair, and sustainable, we have a few important rules that all members must follow to stay in the community and enjoy gameplay. Please read carefully:')
+          .setDescription('Hey @Cockroach Party! 👋🏻\nWelcome to our smp! To keep everything fun, fair, and sustainable, we have a few important rules that all members must follow to stay in the community and enjoy gameplay. Please read carefully:\n\nDo NOT spam whitelist requests during live streams – Messages like "whitelist me" will be deleted. Repeated offenses may lead to a mute or ban. Be patient and respectful.')
           .addFields(
             {
-              name: '🛡️ GENERAL RULES:',
-              value: '• Respect all members – No hate speech, harassment, discrimination, or bullying.\n'
-                + '• No spamming – Avoid repeated messages, emojis, or self-promotion.\n'
-                + '• Keep things appropriate – No NSFW content, excessive swearing, or offensive usernames.\n'
-                + '• Follow Discord TOS – All members must comply with Discord\'s Terms of Service and Community Guidelines.\n'
-                + '• Do NOT spam whitelist requests during live streams – If you spam "whitelist me" or similar messages in the chat, your message will be deleted, and repeated offenses may lead to a mute or ban. Be patient and respectful!'
+              name: '💰 SERVER ACCESS FEE',
+              value: 'This is a paid server with limited resources.\n\n'
+                + 'Every member must pay ₹1 per day to maintain access.\n\n'
+                + 'Payments can be made in advance (e.g., ₹30 for a month).\n\n'
+                + 'Non-payment will result in a temporary suspension until dues are cleared.\n\n'
+                + 'If you\'re unable to pay for any reason, please contact an admin before missing your payment.\n\n'
+                + '⚠️ Please note: If you are banned from the server for breaking the rules, no refunds will be provided under any circumstances.'
             },
             {
-              name: '💰 SERVER ACCESS FEE:',
-              value: '• This is a paid server with limited resources, so to help cover costs and keep it running smoothly, every member is required to pay ₹1 per day to maintain access.\n'
-                + '• Payments can be made in advance (e.g., ₹30 for a month).\n'
-                + '• Non-payment will result in temporary suspension until dues are cleared.\n'
-                + '• If you\'re unable to pay for any reason, please contact an admin before missing your payment.'
+              name: '🎮 IN-GAME RULES',
+              value: 'No cheating or hacking – Use of third-party tools or exploits will result in an immediate ban.\n\n'
+                + 'No griefing or trolling – Don\'t ruin others\' experience (e.g., stealing, destroying builds, baiting).\n\n'
+                + 'No personal builds near spawn or the main SMP area – These are reserved for community use. Build your personal base at a reasonable distance.\n\n'
+                + 'Play fair and team up respectfully – Collaborate, don\'t dominate.\n\n'
+                + 'Use proper channels for voice/text – Stick to designated channels for in-game discussion, support, and off-topic chat.'
             },
             {
-              name: '🎮 IN-GAME RULES:',
-              value: '• No cheating/hacking – Any use of third-party software or exploits will lead to an immediate ban.\n'
-                + '• No griefing/trolling – Don\'t ruin the experience for others (e.g., stealing, destroying builds, or baiting).\n'
-                + '• No personal builds near spawn or main SMP area – These zones are reserved for community use. Please build your personal base at a reasonable distance.\n'
-                + '• Play fair and team up respectfully – Collaborate, don\'t dominate.\n'
-                + '• Use proper channels for voice/text – Stick to designated channels for in-game discussion, support, and off-topic chat.'
-            },
-            {
-              name: '📢 IMPORTANT NOTES:',
-              value: '• Breaking the rules may result in a warning, mute, kick, or permanent ban depending on the severity.\n'
-                + '• If you see someone breaking the rules, report it to the moderators or admins privately.\n'
-                + '• Keep the community friendly and fun for everyone!\n\n'
-                + '✅ By staying in this server, you agree to follow all the above rules, including the daily access fee.\n'
-                + 'Let\'s build a respectful, supportive, and fun community together!\n\n'
-                + 'If you have any questions or need help with payment, whitelisting, or rules, don\'t hesitate to reach out to a mod or admin. Thanks and happy gaming! 🎮✨'
+              name: '📢 IMPORTANT NOTES',
+              value: 'Rule violations may result in a warning, mute, kick, or permanent ban, depending on severity.\n\n'
+                + 'If you see someone breaking the rules, report it privately to a mod or admin.\n\n'
+                + 'Let\'s keep this a friendly, safe, and fun community for everyone!\n\n'
+                + '✅ By staying in this server, you agree to follow all rules, including the daily access fee and no-refund policy for bans.\n\n'
+                + 'If you have any questions or need help with payment, whitelisting, or anything else, feel free to reach out to a mod or admin.\n\n'
+                + 'Thanks for being here – and happy gaming! 🎮✨ @everyone @here @Minecraft'
             }
           )
           .setTimestamp()
