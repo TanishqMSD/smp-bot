@@ -562,7 +562,7 @@ client.on('messageCreate', async (message) => {
 
         // Check if the player exists in the game
 const playerNameToTeleport = args[0];
-        const targetPlayer = Object.values(bot.players).find(p => p.username.toLowerCase() === targetPlayerName.toLowerCase());
+        const targetPlayer = Object.values(bot.players).find(p => p.username.toLowerCase() === playerNameToTeleport.toLowerCase());
         
         if (!targetPlayer) {
           return message.reply(`Player ${targetPlayerName} is not online.`);
