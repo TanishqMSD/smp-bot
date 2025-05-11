@@ -544,6 +544,43 @@ client.on('messageCreate', async (message) => {
         message.react('✅');
         break;
 
+      case 'comehere':
+        // Check if user has permission
+        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+          try {
+            const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+          } catch (error) {
+            console.error('Failed to send error message:', error);
+          }
+          return;
+        }
+
+        if (!args[0]) {
+          return message.reply('Please specify a player to teleport to. Usage: !mc comehere <player>');
+        }
+
+        // Check if the player exists in the game
+const playerNameToTeleport = args[0];
+        const targetPlayer = Object.values(bot.players).find(p => p.username.toLowerCase() === targetPlayerName.toLowerCase());
+        
+        if (!targetPlayer) {
+          return message.reply(`Player ${targetPlayerName} is not online.`);
+        }
+
+        if (!targetPlayer.entity) {
+          return message.reply(`Player ${targetPlayerName} is not in range. Get closer to them.`);
+        }
+
+        try {
+          bot.chat(`/tp ${bot.username} ${targetPlayer.username}`);
+          message.reply(`✅ Teleported to ${targetPlayer.username}`);
+        } catch (error) {
+          console.error('Failed to execute teleport command:', error);
+          message.reply('⚠️ Failed to teleport to the player.');
+        }
+        break;
+
       case 'follow':
         // Check if user has permission
         if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
@@ -560,9 +597,16 @@ client.on('messageCreate', async (message) => {
           return message.reply('Please specify a player to follow. Usage: !mc follow <player>');
         }
 
-        const playerToFollow = bot.players[args[0]];
-        if (!playerToFollow || !playerToFollow.entity) {
-          return message.reply('Player not found or not in range.');
+        // Check if the player exists in the game
+        const targetPlayerName = args[0];
+        const playerToFollow = Object.values(bot.players).find(p => p.username.toLowerCase() === targetPlayerName.toLowerCase());
+        
+        if (!playerToFollow) {
+          return message.reply(`Player ${targetPlayerName} is not online.`);
+        }
+
+        if (!playerToFollow.entity) {
+          return message.reply(`Player ${targetPlayerName} is not in range. Get closer to them.`);
         }
 
         try {
