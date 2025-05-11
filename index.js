@@ -403,6 +403,18 @@ client.on('messageCreate', async (message) => {
         break;
 
       case 'say':
+        // Check if user has permission
+        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+          try {
+            const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+          } catch (error) {
+            console.error('Failed to send error message:', error);
+          }
+          return;
+        }
+
+        // Check if bot is connected
         if (!bot || !bot.entity) {
           try {
             const errorMsg = await message.channel.send('⚠️ Cannot send message: Bot is not connected to the server.');
@@ -413,6 +425,7 @@ client.on('messageCreate', async (message) => {
           return;
         }
         
+        // Get message text
         const text = args.join(' ');
         if (!text) {
           try {
@@ -424,9 +437,13 @@ client.on('messageCreate', async (message) => {
           return;
         }
         
+        // Send message to Minecraft
         try {
-          await bot.chat(text);
-          const confirmMsg = await message.channel.send('✅ Message sent successfully!');
+          // Use bot.chat() to send the message in-game
+          bot.chat(text);
+          
+          // Send confirmation to Discord
+          const confirmMsg = await message.channel.send(`✅ Sent to Minecraft: ${text}`);
           setTimeout(() => confirmMsg.delete().catch(() => {}), 5000);
         } catch (error) {
           console.error('Failed to send message to Minecraft:', error);
