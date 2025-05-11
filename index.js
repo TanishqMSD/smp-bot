@@ -55,18 +55,11 @@ const initMinecraftBot = () => {
 
   
 
-  // Initialize Prismarine Viewer
-  const mineflayerViewer = require('prismarine-viewer').mineflayer;
-
   // Minecraft bot event handlers
   mcBot.on('spawn', () => {
     console.log('Minecraft bot connected to server');
     isServerOnline = true;
     updateBotStatus();
-    
-    // Start the viewer
-    mineflayerViewer(mcBot, { port: 3007, firstPerson: true });
-    console.log('Prismarine viewer started on port 3007');
     
     // Send server online message to Discord
     const channel = client.channels.cache.find(ch => ch.name === MC_CHAT_CHANNEL);
