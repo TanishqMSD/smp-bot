@@ -221,15 +221,67 @@ client.on('ready', () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // Only process messages from the minecraft-chat channel
-  if (message.channel.name !== MC_CHAT_CHANNEL) return;
+  // Handle tell command as it works in any channel
+  if (message.content.startsWith('!mc tell')) {
+    // Check if user has permission
+    if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+      try {
+        const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+        setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+      } catch (error) {
+        console.error('Failed to send error message:', error);
+      }
+      return;
+    }
 
-  // Forward non-command messages to Minecraft
-  if (!message.content.startsWith('!mc')) {
-    if (bot && bot.entity) {
-      bot.chat(`[Discord] ${message.author.username}: ${message.content}`);
+    // Delete the command message immediately
+    try {
+      await message.delete();
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+    }
+
+    const args = message.content.slice(7).trim().split(/ +/);
+    const tellText = args.join(' ');
+    if (!tellText) {
+      try {
+        const errorMsg = await message.channel.send('Please provide a message to send.');
+        setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+      } catch (error) {
+        console.error('Failed to send error message:', error);
+      }
+      return;
+    }
+
+    // Send the message to the Discord channel
+    try {
+      await message.channel.send(tellText);
+    } catch (error) {
+      console.error('Failed to send message to Discord:', error);
+      const errorMsg = await message.channel.send('⚠️ Failed to send message.');
+      setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
     }
     return;
+  }
+
+  // Only process commands in minecraft-chat channel except for tell command
+  if (message.channel.name !== MC_CHAT_CHANNEL) {
+    return;
+  }
+
+  // Only process commands starting with !mc
+  if (!message.content.startsWith('!mc')) {
+    return;
+  }
+
+  // Handle !mc say command first to ensure quick deletion
+  if (message.content.startsWith('!mc say')) {
+    // Delete the message immediately
+    try {
+      await message.delete();
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+    }
   }
 
   // Handle commands
@@ -280,13 +332,39 @@ client.on('messageCreate', async (message) => {
         break;
 
       case 'say':
-        if (!bot || !bot.entity) return;
-        const text = args.join(' ');
-        if (!text) return message.reply('Please provide a message to send.');
+        if (!bot || !bot.entity) {
+          try {
+            const errorMsg = await message.channel.send('⚠️ Cannot send message: Bot is not connected to the server.');
+            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+          } catch (error) {
+            console.error('Failed to send error message:', error);
+          }
+          return;
+        }
         
-        bot.chat(`[Discord] ${message.author.username}: ${text}`);
-        message.react('✅');
+        const text = args.join(' ');
+        if (!text) {
+          try {
+            const errorMsg = await message.channel.send('Please provide a message to send.');
+            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+          } catch (error) {
+            console.error('Failed to send error message:', error);
+          }
+          return;
+        }
+        
+        try {
+          await bot.chat(text);
+          const confirmMsg = await message.channel.send('✅ Message sent successfully!');
+          setTimeout(() => confirmMsg.delete().catch(() => {}), 5000);
+        } catch (error) {
+          console.error('Failed to send message to Minecraft:', error);
+          const errorMsg = await message.channel.send('⚠️ Failed to send message to Minecraft server.');
+          setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+        }
         break;
+
+
 
       case 'cmd':
         // Admin command - check if user has admin role
@@ -388,6 +466,7 @@ client.on('messageCreate', async (message) => {
             { name: '!mc status', value: 'Show server status and online players' },
             { name: '!mc list', value: 'Show detailed list of online players' },
             { name: '!mc say <message>', value: 'Send a message to the Minecraft server' },
+            { name: '!mc tell <message>', value: 'Send a message to the Discord channel (Restricted)' },
             { name: '!mc time', value: 'Show the current time in the Minecraft world' },
             { name: '!mc weather', value: 'Show the current weather in the Minecraft world' },
             { name: '!mc help', value: 'Show this help message' }
