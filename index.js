@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ActivityType } = require('discord.js');
 const mineflayer = require('mineflayer');
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const http = require('http');
 const https = require('https');
 
@@ -30,6 +31,7 @@ const initMinecraftBot = () => {
   console.log('Attempting to connect to Minecraft server...');
   
   const mcBot = mineflayer.createBot({
+    plugins: [pathfinder],
     host: process.env.MC_HOST || 'in02.servoid.pro',
     port: parseInt(process.env.MC_PORT || '8641'),
     username: 'Havaldaar',
@@ -37,15 +39,34 @@ const initMinecraftBot = () => {
     version: process.env.MC_VERSION || false,
     hideErrors: true,
     skipValidation: true,
-    viewDistance: 'tiny',
-    hideInTabList: true
+     viewDistance: 'tiny',
+    hideInTabList: true,
+    skinParts: {
+      showCape: true,
+      showJacket: true,
+      showLeftSleeve: true,
+      showRightSleeve: true,
+      showLeftPants: true,
+      showRightPants: true,
+      showHat: true
+    },
+    skin: './assets/skins/botskin.png'
   });
+
+  
+
+  // Initialize Prismarine Viewer
+  const mineflayerViewer = require('prismarine-viewer').mineflayer;
 
   // Minecraft bot event handlers
   mcBot.on('spawn', () => {
     console.log('Minecraft bot connected to server');
     isServerOnline = true;
     updateBotStatus();
+    
+    // Start the viewer
+    mineflayerViewer(mcBot, { port: 3007, firstPerson: true });
+    console.log('Prismarine viewer started on port 3007');
     
     // Send server online message to Discord
     const channel = client.channels.cache.find(ch => ch.name === MC_CHAT_CHANNEL);
@@ -530,6 +551,97 @@ client.on('messageCreate', async (message) => {
         message.react('✅');
         break;
 
+      case 'follow':
+        // Check if user has permission
+        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+          try {
+            const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+          } catch (error) {
+            console.error('Failed to send error message:', error);
+          }
+          return;
+        }
+
+        if (!args[0]) {
+          return message.reply('Please specify a player to follow. Usage: !mc follow <player>');
+        }
+
+        const playerToFollow = bot.players[args[0]];
+        if (!playerToFollow || !playerToFollow.entity) {
+          return message.reply('Player not found or not in range.');
+        }
+
+        try {
+          bot.pathfinder.setGoal(null); // Clear any existing goals
+          bot.pathfinder.setMovements(new Movements(bot));
+          bot.pathfinder.setGoal(new goals.GoalFollow(playerToFollow.entity, 2), true);
+          message.reply(`✅ Now following ${args[0]}`);
+        } catch (error) {
+          message.reply(`❌ Error following player: ${error.message}`);
+        }
+        break;
+
+      case 'attack':
+        // Check if user has permission
+        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+          try {
+            const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+          } catch (error) {
+            console.error('Failed to send error message:', error);
+          }
+          return;
+        }
+
+        if (!args[0]) {
+          return message.reply('Please specify a mob type to attack. Usage: !mc attack <mob>');
+        }
+
+        try {
+          const mobFilter = e => e.type === args[0] && e.position.distanceTo(bot.entity.position) < 16;
+          const mob = bot.nearestEntity(mobFilter);
+          
+          if (!mob) {
+            return message.reply(`No ${args[0]} found nearby.`);
+          }
+
+          bot.pathfinder.setGoal(null);
+          bot.lookAt(mob.position);
+          bot.attack(mob);
+          message.reply(`✅ Attacking ${args[0]}`);
+        } catch (error) {
+          message.reply(`❌ Error attacking mob: ${error.message}`);
+        }
+        break;
+
+      case 'comehere':
+        // Check if user has permission
+        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+          try {
+            const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+          } catch (error) {
+            console.error('Failed to send error message:', error);
+          }
+          return;
+        }
+
+        const caller = bot.players[message.author.username];
+        if (!caller || !caller.entity) {
+          return message.reply('You must be in the game to use this command.');
+        }
+
+        try {
+          bot.pathfinder.setGoal(null);
+          bot.pathfinder.setMovements(new Movements(bot));
+          bot.pathfinder.setGoal(new goals.GoalNear(caller.entity.position.x, caller.entity.position.y, caller.entity.position.z, 2));
+          message.reply('✅ Coming to your location');
+        } catch (error) {
+          message.reply(`❌ Error moving to location: ${error.message}`);
+        }
+        break;
+
       case 'restart':
         if (!message.member.permissions.has('ADMINISTRATOR')) {
           return message.reply('You do not have permission to use this command.');
@@ -563,7 +675,23 @@ client.on('messageCreate', async (message) => {
           return message.reply('⚠️ Bot is already disconnected from the server.');
         }
         
-        message.channel.send('🔌 Disconnecting from the Minecraft server...');
+        try {
+          // Send initial message
+          await message.channel.send('🔌 Disconnecting from the Minecraft server...');
+          
+          // Quit the bot
+          bot.quit();
+          isServerOnline = false;
+          updateBotStatus();
+          
+          // Send confirmation message
+          await message.channel.send('✅ Successfully disconnected. Use !mc restart to reconnect.');
+        } catch (error) {
+          console.error('Error during disconnect:', error);
+          await message.channel.send('⚠️ Error occurred while disconnecting. Please try again.');
+        }
+        break;
+console.log('Disconnecting from the Minecraft server...');
         bot.quit();
         isServerOnline = false;
         updateBotStatus();
