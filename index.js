@@ -298,7 +298,7 @@ client.on('messageCreate', async (message) => {
       const rulesEmbed = new EmbedBuilder()
         .setTitle('📢 Server Rules & Guidelines – Please Read! 📢')
         .setColor('#ff6b6b')
-        .setDescription('Hey @Cockroach Party! 👋🏻\nWelcome to our smp! To keep everything fun, fair, and sustainable, we have a few important rules that all members must follow to stay in the community and enjoy gameplay. Please read carefully:\n\nDo NOT spam whitelist requests during live streams – Messages like "whitelist me" will be deleted. Repeated offenses may lead to a mute or ban. Be patient and respectful.')
+        .setDescription('Hey <@&1260683185185095710>! 👋🏻\nWelcome to our smp! To keep everything fun, fair, and sustainable, we have a few important rules that all members must follow to stay in the community and enjoy gameplay. Please read carefully:\n\nDo NOT spam whitelist requests during live streams – Messages like "whitelist me" will be deleted. Repeated offenses may lead to a mute or ban. Be patient and respectful.')
         .addFields(
           {
             name: '💰 SERVER ACCESS FEE',
@@ -324,7 +324,7 @@ client.on('messageCreate', async (message) => {
               + 'Let\'s keep this a friendly, safe, and fun community for everyone!\n\n'
               + '✅ By staying in this server, you agree to follow all rules, including the daily access fee and no-refund policy for bans.\n\n'
               + 'If you have any questions or need help with payment, whitelisting, or anything else, feel free to reach out to a mod or admin.\n\n'
-              + 'Thanks for being here – and happy gaming! 🎮✨ @everyone @here @Minecraft'
+              + 'Thanks for being here – and happy gaming! 🎮✨'
           }
         )
         .setTimestamp()
