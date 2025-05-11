@@ -561,23 +561,32 @@ client.on('messageCreate', async (message) => {
         }
 
         // Check if the player exists in the game
-const playerNameToTeleport = args[0];
+        const playerNameToTeleport = args[0];
         const targetPlayer = Object.values(bot.players).find(p => p.username.toLowerCase() === playerNameToTeleport.toLowerCase());
         
         if (!targetPlayer) {
-          return message.reply(`Player ${targetPlayerName} is not online.`);
+          return message.reply(`Player ${playerNameToTeleport} is not online.`);
         }
 
         if (!targetPlayer.entity) {
-          return message.reply(`Player ${targetPlayerName} is not in range. Get closer to them.`);
+          return message.reply(`Cannot locate ${playerNameToTeleport}'s position. They might be too far away.`);
         }
 
         try {
-          bot.chat(`/tp ${bot.username} ${targetPlayer.username}`);
-          message.reply(`✅ Teleported to ${targetPlayer.username}`);
+          // Initialize pathfinder movements
+          const mcData = require('minecraft-data')(bot.version);
+          const movements = new Movements(bot, mcData);
+          bot.pathfinder.setMovements(movements);
+
+          // Set goal to move to player
+          const goal = new goals.GoalNear(targetPlayer.entity.position.x, targetPlayer.entity.position.y, targetPlayer.entity.position.z, 1);
+          
+          // Start pathfinding
+          await bot.pathfinder.goto(goal);
+          message.channel.send(`✅ Successfully moved to ${playerNameToTeleport}'s location.`);
         } catch (error) {
-          console.error('Failed to execute teleport command:', error);
-          message.reply('⚠️ Failed to teleport to the player.');
+          console.error('Pathfinding error:', error);
+          message.channel.send(`❌ Failed to reach ${playerNameToTeleport}'s location: ${error.message}`);
         }
         break;
 
