@@ -440,7 +440,10 @@ client.on('messageCreate', async (message) => {
         // Send message to Minecraft
         try {
           // Use bot.chat() to send the message in-game
-          bot.chat(text);
+          await bot.chat(text);
+          
+          // Wait a short moment to ensure message is sent
+          await new Promise(resolve => setTimeout(resolve, 500));
           
           // Send confirmation to Discord
           const confirmMsg = await message.channel.send(`✅ Sent to Minecraft: ${text}`);
@@ -542,6 +545,29 @@ client.on('messageCreate', async (message) => {
           bot = initMinecraftBot();
           message.channel.send('✅ Reconnection attempt initiated.');
         }, 5000);
+        break;
+
+      case 'disconnect':
+        // Check if user has permission
+        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+          try {
+            const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+          } catch (error) {
+            console.error('Failed to send error message:', error);
+          }
+          return;
+        }
+        
+        if (!bot || !bot.entity) {
+          return message.reply('⚠️ Bot is already disconnected from the server.');
+        }
+        
+        message.channel.send('🔌 Disconnecting from the Minecraft server...');
+        bot.quit();
+        isServerOnline = false;
+        updateBotStatus();
+        message.channel.send('✅ Successfully disconnected. Use `!mc restart` to reconnect.');
         break;
 
       case 'rules':
