@@ -39,7 +39,7 @@ const initMinecraftBot = () => {
     version: process.env.MC_VERSION || false,
     hideErrors: true,
     skipValidation: true,
-     viewDistance: 'tiny',
+    viewDistance: 'tiny',
     hideInTabList: true,
     skinParts: {
       showCape: true,
@@ -60,6 +60,18 @@ const initMinecraftBot = () => {
     console.log('Minecraft bot connected to server');
     isServerOnline = true;
     updateBotStatus();
+    
+    // Initialize pathfinder with appropriate movements
+    const mcData = require('minecraft-data')(mcBot.version);
+    const movements = new Movements(mcBot, mcData);
+    
+    // Configure movements for SMP environment
+    movements.allowSprinting = true;
+    movements.canDig = false;  // Don't dig blocks in SMP
+    movements.maxDropDown = 4; // Maximum safe drop distance
+    
+    // Apply movements to pathfinder
+    mcBot.pathfinder.setMovements(movements);
     
     // Send server online message to Discord
     const channel = client.channels.cache.find(ch => ch.name === MC_CHAT_CHANNEL);
@@ -385,7 +397,7 @@ client.on('messageCreate', async (message) => {
       case 'status':
         const players = bot?.players || {};
         const playerCount = Object.keys(players).length;
-        const playerList = Object.keys(players).join(', ') || 'No players online';
+        const onlinePlayers = Object.keys(players).join(', ') || 'No players online';
         
         const embed = new EmbedBuilder()
           .setTitle('Minecraft Server Status')
@@ -606,24 +618,43 @@ client.on('messageCreate', async (message) => {
           return message.reply('Please specify a player to follow. Usage: !mc follow <player>');
         }
 
-        // Check if the player exists in the game
+        // Check if the player exists in the game with partial matching
         const targetPlayerName = args[0];
-        const playerToFollow = Object.values(bot.players).find(p => p.username.toLowerCase() === targetPlayerName.toLowerCase());
+        const playerList = Object.keys(bot.players);
+        const playerMatch = playerList.find(name => 
+          name.toLowerCase() === targetPlayerName.toLowerCase() ||
+          name.toLowerCase().includes(targetPlayerName.toLowerCase())
+        );
         
-        if (!playerToFollow) {
-          return message.reply(`Player ${targetPlayerName} is not online.`);
+        if (!playerMatch) {
+          return message.reply(`Player matching "${targetPlayerName}" not found. Available players: ${playerList.join(', ')}`);
         }
-
-        if (!playerToFollow.entity) {
-          return message.reply(`Player ${targetPlayerName} is not in range. Get closer to them.`);
+        
+        const playerToFollow = bot.players[playerMatch];
+        if (!playerToFollow || !playerToFollow.entity) {
+          return message.reply(`Player ${playerMatch} is online but not in visible range. They need to be nearby.`);
         }
 
         try {
-          bot.pathfinder.setGoal(null); // Clear any existing goals
-          bot.pathfinder.setMovements(new Movements(bot));
-          bot.pathfinder.setGoal(new goals.GoalFollow(playerToFollow.entity, 2), true);
-          message.reply(`✅ Now following ${args[0]}`);
+          // Clear any existing goals
+          bot.pathfinder.setGoal(null);
+          
+          // Get the current mcData and set up movements
+          const mcData = require('minecraft-data')(bot.version);
+          const movements = new Movements(bot, mcData);
+          movements.canDig = false; // Don't dig in SMP
+          bot.pathfinder.setMovements(movements);
+          
+          // Set goal to follow the player with a distance of 2 blocks
+          const followGoal = new goals.GoalFollow(playerToFollow.entity, 2);
+          bot.pathfinder.setGoal(followGoal, true); // true = dynamic goal that updates with player movement
+          
+          message.reply(`✅ Now following ${playerMatch}`);
+          
+          // Send a message in-game to notify the player
+          bot.chat(`I'm now following ${playerMatch}`);
         } catch (error) {
+          console.error('Pathfinding error:', error);
           message.reply(`❌ Error following player: ${error.message}`);
         }
         break;
@@ -641,22 +672,53 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!args[0]) {
-          return message.reply('Please specify a mob type to attack. Usage: !mc attack <mob>');
+          return message.reply('Please specify a mob type to attack. Usage: !mc attack <mob> (e.g., zombie, skeleton, spider)');
         }
 
         try {
-          const mobFilter = e => e.type === args[0] && e.position.distanceTo(bot.entity.position) < 16;
+          // Get all entities and find mobs that match the requested type
+          const mobType = args[0].toLowerCase();
+          const entities = Object.values(bot.entities);
+          
+          // Log available entity types for debugging
+          const entityTypes = [...new Set(entities.map(e => e.type?.toLowerCase()).filter(Boolean))];
+          console.log('Available entity types:', entityTypes);
+          
+          // Create a more flexible filter that checks if the entity type contains the requested mob name
+          const mobFilter = e => {
+            if (!e || !e.type) return false;
+            const entityType = e.type.toLowerCase();
+            return entityType.includes(mobType) && 
+                   e.position.distanceTo(bot.entity.position) < 32 && // Increased range
+                   e.type !== 'player'; // Don't attack players
+          };
+          
           const mob = bot.nearestEntity(mobFilter);
           
           if (!mob) {
-            return message.reply(`No ${args[0]} found nearby.`);
+            return message.reply(`No ${args[0]} found nearby. Available mobs: ${entityTypes.join(', ')}`);
           }
 
+          // Clear any existing goals
           bot.pathfinder.setGoal(null);
+          
+          // Set up pathfinder to move to the mob
+          const mcData = require('minecraft-data')(bot.version);
+          const movements = new Movements(bot, mcData);
+          movements.canDig = false; // Don't dig in SMP
+          bot.pathfinder.setMovements(movements);
+          
+          // Set goal to move near the mob
+          const goal = new goals.GoalNear(mob.position.x, mob.position.y, mob.position.z, 2);
+          bot.pathfinder.setGoal(goal);
+          
+          // Look at and attack the mob
           bot.lookAt(mob.position);
           bot.attack(mob);
-          message.reply(`✅ Attacking ${args[0]}`);
+          
+          message.reply(`✅ Moving to and attacking ${mob.type} (ID: ${mob.id})`);
         } catch (error) {
+          console.error('Attack error:', error);
           message.reply(`❌ Error attacking mob: ${error.message}`);
         }
         break;
@@ -673,17 +735,45 @@ client.on('messageCreate', async (message) => {
           return;
         }
 
-        const caller = bot.players[message.author.username];
+        // Find the player by Discord username or by specified username
+        let playerUsername = message.author.username;
+        if (args[0]) {
+          playerUsername = args[0];
+        }
+        
+        // Look for the player in the game
+        const availablePlayers = Object.keys(bot.players);
+        const closestMatch = playerList.find(name => 
+          name.toLowerCase() === playerUsername.toLowerCase() ||
+          name.toLowerCase().includes(playerUsername.toLowerCase())
+        );
+        
+        if (!closestMatch) {
+          return message.reply(`Could not find player matching "${playerUsername}" in the game. Available players: ${playerList.join(', ')}`);
+        }
+        
+        const caller = bot.players[closestMatch];
         if (!caller || !caller.entity) {
-          return message.reply('You must be in the game to use this command.');
+          return message.reply(`Player ${closestMatch} is in the game but not in visible range. They need to be nearby.`);
         }
 
         try {
+          // Clear any existing goals
           bot.pathfinder.setGoal(null);
-          bot.pathfinder.setMovements(new Movements(bot));
-          bot.pathfinder.setGoal(new goals.GoalNear(caller.entity.position.x, caller.entity.position.y, caller.entity.position.z, 2));
-          message.reply('✅ Coming to your location');
+          
+          // Get the current mcData and set up movements
+          const mcData = require('minecraft-data')(bot.version);
+          const movements = new Movements(bot, mcData);
+          movements.canDig = false; // Don't dig in SMP
+          bot.pathfinder.setMovements(movements);
+          
+          // Set goal to move near the player
+          const goal = new goals.GoalNear(caller.entity.position.x, caller.entity.position.y, caller.entity.position.z, 2);
+          bot.pathfinder.setGoal(goal);
+          
+          message.reply(`✅ Coming to ${closestMatch}'s location`);
         } catch (error) {
+          console.error('Pathfinding error:', error);
           message.reply(`❌ Error moving to location: ${error.message}`);
         }
         break;
