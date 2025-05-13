@@ -747,11 +747,19 @@ try {
   bot.pathfinder.setMovements(movements);
 
   // Set goal to move to player
-  const goal = new goals.GoalNear(targetPlayerToTeleport.entity.position.x, targetPlayerToTeleport.entity.position.y, targetPlayerToTeleport.entity.position.z, 1);
+  const goal = new GoalNear(targetPlayerToTeleport.entity.position.x, targetPlayerToTeleport.entity.position.y, targetPlayerToTeleport.entity.position.z, 1);
 
-  // Start pathfinding
-  await bot.pathfinder.goto(goal);
-  message.channel.send(`✅ Successfully moved to ${playerNameToTeleport}'s location.`);
+  // Start pathfinding with setGoal instead of goto to avoid GoalChanged errors
+  bot.pathfinder.setGoal(goal);
+  message.channel.send(`✅ Moving to ${playerNameToTeleport}'s location...`);
+  
+  // Set a timeout to check if we reached the destination
+  setTimeout(() => {
+    if (bot.entity && targetPlayerToTeleport.entity && 
+        bot.entity.position.distanceTo(targetPlayerToTeleport.entity.position) <= 3) {
+      message.channel.send(`✅ Successfully reached ${playerNameToTeleport}'s location.`);
+    }
+  }, 10000); // Check after 10 seconds
 } catch (error) {
   console.error('Pathfinding error:', error);
   message.channel.send(`❌ Failed to reach ${playerNameToTeleport}'s location: ${error.message}`);
@@ -939,13 +947,13 @@ case 'stopfollow':
         
         // Look for the player in the game
         const availablePlayers = Object.keys(bot.players);
-        const closestMatch = playerList.find(name => 
+        const closestMatch = availablePlayers.find(name => 
           name.toLowerCase() === playerUsername.toLowerCase() ||
           name.toLowerCase().includes(playerUsername.toLowerCase())
         );
         
         if (!closestMatch) {
-          return message.reply(`Could not find player matching "${playerUsername}" in the game. Available players: ${playerList.join(', ')}`);
+          return message.reply(`Could not find player matching "${playerUsername}" in the game. Available players: ${availablePlayers.join(', ')}`);
         }
         
         const caller = bot.players[closestMatch];
@@ -964,10 +972,18 @@ case 'stopfollow':
           bot.pathfinder.setMovements(movements);
           
           // Set goal to move near the player
-          const goal = new goals.GoalNear(caller.entity.position.x, caller.entity.position.y, caller.entity.position.z, 2);
+          const goal = new GoalNear(caller.entity.position.x, caller.entity.position.y, caller.entity.position.z, 2);
           bot.pathfinder.setGoal(goal);
           
           message.reply(`✅ Coming to ${closestMatch}'s location`);
+          
+          // Set a timeout to check if we reached the destination
+          setTimeout(() => {
+            if (bot.entity && caller.entity && 
+                bot.entity.position.distanceTo(caller.entity.position) <= 3) {
+              message.channel.send(`✅ Successfully reached ${closestMatch}'s location.`);
+            }
+          }, 10000); // Check after 10 seconds
         } catch (error) {
           console.error('Pathfinding error:', error);
           message.reply(`❌ Error moving to location: ${error.message}`);
