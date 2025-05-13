@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ActivityType } = require('discord.js');
 const mineflayer = require('mineflayer');
-const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
+const { pathfinder, Movements, goals: { GoalFollow, GoalNear, GoalBlock } } = require('mineflayer-pathfinder');
 const http = require('http');
 const https = require('https');
 
@@ -25,6 +25,14 @@ const client = new Client({
 
 // Bot instance
 let bot;
+
+// Variables to track bot state
+let isFollowing = false;
+let followingPlayer = null;
+let isAttacking = false;
+let attackingMob = null;
+let autoAttackEnabled = false;
+let autoAttackRadius = 5; // Default radius for auto-attack
 
 // Initialize Minecraft bot
 const initMinecraftBot = () => {
@@ -185,6 +193,55 @@ const initMinecraftBot = () => {
     // Optional: Report noteblock activity
     console.log('Noteblock heard:', instrument, pitch);
   });
+  
+  // Entity detection for improved combat awareness
+  mcBot.on('entitySpawn', (entity) => {
+    if (!mcBot.entity || !autoAttackEnabled) return;
+    
+    try {
+      // Check if it's a hostile mob within attack radius
+      if (entity && entity.type && entity.position) {
+        const isHostile = ['zombie', 'skeleton', 'spider', 'creeper', 'witch', 'enderman'].some(mobType => 
+          entity.type.toLowerCase().includes(mobType)
+        );
+        
+        if (isHostile && entity.position.distanceTo(mcBot.entity.position) <= autoAttackRadius) {
+          console.log(`Detected new hostile entity: ${entity.type}`);
+          
+          // Don't attack if already attacking something
+          if (!isAttacking) {
+            attackMob(mcBot, entity);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Entity detection error:', error);
+    }
+  });
+  
+  // Handle entity movement for better combat tracking
+  mcBot.on('entityMoved', (entity) => {
+    if (!mcBot.entity || !autoAttackEnabled || isAttacking) return;
+    
+    try {
+      // Check if it's a hostile mob that moved into attack radius
+      if (entity && entity.type && entity.position) {
+        const isHostile = ['zombie', 'skeleton', 'spider', 'creeper', 'witch', 'enderman'].some(mobType => 
+          entity.type.toLowerCase().includes(mobType)
+        );
+        
+        if (isHostile && entity.position.distanceTo(mcBot.entity.position) <= autoAttackRadius) {
+          // Only attack if not already attacking and mob is very close
+          if (!isAttacking && entity.position.distanceTo(mcBot.entity.position) <= 3) {
+            console.log(`Hostile entity moved close: ${entity.type}`);
+            attackMob(mcBot, entity);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Entity movement tracking error:', error);
+    }
+  });
 
   // Health check interval
   setInterval(() => {
@@ -197,6 +254,66 @@ const initMinecraftBot = () => {
       updateBotStatus();
     }
   }, 30000);
+  
+  // Auto-attack nearby hostile mobs
+  setInterval(() => {
+    if (!mcBot.entity || !autoAttackEnabled) return;
+    
+    try {
+      // Don't interrupt if already attacking
+      if (isAttacking) return;
+      
+      // Find nearby hostile mobs
+      const hostileMobs = Object.values(mcBot.entities).filter(entity => {
+        if (!entity || !entity.type) return false;
+        
+        const isHostile = ['zombie', 'skeleton', 'spider', 'creeper', 'witch', 'enderman'].some(mobType => 
+          entity.type.toLowerCase().includes(mobType)
+        );
+        
+        return isHostile && 
+               entity.position.distanceTo(mcBot.entity.position) <= autoAttackRadius && 
+               entity.type !== 'player';
+      });
+      
+      // Attack nearest hostile mob if found
+      if (hostileMobs.length > 0) {
+        const nearestMob = hostileMobs.reduce((nearest, mob) => {
+          const currentDistance = mob.position.distanceTo(mcBot.entity.position);
+          const nearestDistance = nearest ? nearest.position.distanceTo(mcBot.entity.position) : Infinity;
+          return currentDistance < nearestDistance ? mob : nearest;
+        }, null);
+        
+        if (nearestMob) {
+          console.log(`Auto-attacking nearby ${nearestMob.type}`);
+          attackMob(mcBot, nearestMob);
+        }
+      }
+    } catch (error) {
+      console.error('Auto-attack error:', error);
+    }
+  }, 2000); // Check every 2 seconds
+  
+  // Update following behavior
+  setInterval(() => {
+    if (!mcBot.entity || !isFollowing || !followingPlayer) return;
+    
+    try {
+      const player = mcBot.players[followingPlayer];
+      if (!player || !player.entity) {
+        isFollowing = false;
+        followingPlayer = null;
+        return;
+      }
+      
+      // Update follow goal to keep following the player
+      mcBot.pathfinder.setGoal(new GoalFollow(player.entity, 2));
+    } catch (error) {
+      console.error('Follow update error:', error);
+      isFollowing = false;
+      followingPlayer = null;
+    }
+  }, 3000); // Update follow target every 3 seconds
 
   return mcBot;
 };
@@ -209,6 +326,45 @@ function updateBotStatus() {
   } else {
     client.user.setActivity('Server Offline', { type: ActivityType.Watching });
     client.user.setStatus('dnd');
+  }
+}
+
+// Helper function to attack a mob
+function attackMob(bot, mob) {
+  try {
+    // Set tracking variables
+    isAttacking = true;
+    attackingMob = mob.id;
+    
+    // Clear any existing goals
+    bot.pathfinder.setGoal(null);
+    
+    // Set up pathfinder to move to the mob
+    const mcData = require('minecraft-data')(bot.version);
+    const movements = new Movements(bot, mcData);
+    movements.canDig = false; // Don't dig in SMP
+    bot.pathfinder.setMovements(movements);
+    
+    // Set goal to move near the mob
+    const goal = new GoalNear(mob.position.x, mob.position.y, mob.position.z, 2);
+    bot.pathfinder.setGoal(goal);
+    
+    // Look at and attack the mob
+    bot.lookAt(mob.position);
+    bot.attack(mob);
+    
+    // Reset attack state after a delay
+    setTimeout(() => {
+      isAttacking = false;
+      attackingMob = null;
+    }, 10000); // Reset after 10 seconds
+    
+    return true;
+  } catch (error) {
+    console.error('Attack mob error:', error);
+    isAttacking = false;
+    attackingMob = null;
+    return false;
   }
 }
 
@@ -405,7 +561,7 @@ client.on('messageCreate', async (message) => {
           .addFields(
             { name: 'Server', value: `Oggy's SMP Server` },
             { name: 'Status', value: isServerOnline ? '🟢 Online' : '🔴 Offline' },
-            { name: `Players Online (${playerCount})`, value: playerList }
+            { name: `Players Online (${playerCount})`, value: onlinePlayers }
           )
           .setTimestamp();
         
@@ -603,19 +759,54 @@ try {
 break;
 
 case 'follow':
-if (!args[0]) {
-  return message.reply('Please specify a player to follow. Usage: !mc follow <player>');
-}
+  if (!args[0]) {
+    return message.reply('Please specify a player to follow. Usage: !mc follow <player>');
+  }
+  
+  try {
+    const playerNameToFollow = args[0];
+    const targetPlayerToFollow = bot.players[playerNameToFollow];
+    if (!targetPlayerToFollow || !targetPlayerToFollow.entity) {
+      return message.reply(`Cannot locate ${playerNameToFollow}'s position. They might be too far away or not online.`);
+    }
+    
+    // Clear any existing goals
+    bot.pathfinder.setGoal(null);
+    
+    // Set up pathfinder movements
+    const mcData = require('minecraft-data')(bot.version);
+    const movements = new Movements(bot, mcData);
+    movements.canDig = false; // Don't dig in SMP
+    bot.pathfinder.setMovements(movements);
+    
+    // Set follow goal
+    bot.pathfinder.setGoal(new GoalFollow(targetPlayerToFollow.entity, 2));
+    
+    // Update tracking variables
+    isFollowing = true;
+    followingPlayer = playerNameToFollow;
+    
+    message.reply(`✅ Now following ${playerNameToFollow}`);
+  } catch (error) {
+    console.error('Follow error:', error);
+    message.reply(`❌ Error following player: ${error.message}`);
+    isFollowing = false;
+    followingPlayer = null;
+  }
+  break;
 
-const playerNameToFollow = args[0];
-const targetPlayerToFollow = bot.players[playerNameToFollow];
-if (!targetPlayerToFollow || !targetPlayerToFollow.entity) {
-  return message.reply(`Cannot locate ${playerNameToFollow}'s position. They might be too far away or not online.`);
-}
-
-bot.pathfinder.setGoal(new GoalFollow(targetPlayerToFollow.entity, 1));
-message.react('✅');
-break;
+case 'stopfollow':
+  try {
+    // Clear follow goal
+    bot.pathfinder.setGoal(null);
+    isFollowing = false;
+    followingPlayer = null;
+    message.reply('✅ Stopped following player');
+  } catch (error) {
+    console.error('Stop follow error:', error);
+    message.reply(`❌ Error stopping follow: ${error.message}`);
+  }
+  break;
 
       case 'comehere':
         if (!args[0]) {
@@ -690,27 +881,41 @@ break;
             return message.reply(`No ${args[0]} found nearby. Available mobs: ${entityTypes.join(', ')}`);
           }
 
-          // Clear any existing goals
-          bot.pathfinder.setGoal(null);
-          
-          // Set up pathfinder to move to the mob
-          const mcData = require('minecraft-data')(bot.version);
-          const movements = new Movements(bot, mcData);
-          movements.canDig = false; // Don't dig in SMP
-          bot.pathfinder.setMovements(movements);
-          
-          // Set goal to move near the mob
-          const goal = new goals.GoalNear(mob.position.x, mob.position.y, mob.position.z, 2);
-          bot.pathfinder.setGoal(goal);
-          
-          // Look at and attack the mob
-          bot.lookAt(mob.position);
-          bot.attack(mob);
+          // Attack the mob using the helper function
+          attackMob(bot, mob);
           
           message.reply(`✅ Moving to and attacking ${mob.type} (ID: ${mob.id})`);
         } catch (error) {
           console.error('Attack error:', error);
           message.reply(`❌ Error attacking mob: ${error.message}`);
+        }
+        break;
+        
+      case 'autoattack':
+        // Check if user has permission
+        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+          try {
+            const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+          } catch (error) {
+            console.error('Failed to send error message:', error);
+          }
+          return;
+        }
+        
+        // Toggle auto-attack mode
+        if (args[0] === 'on') {
+          autoAttackEnabled = true;
+          // Set radius if provided
+          if (args[1] && !isNaN(parseInt(args[1]))) {
+            autoAttackRadius = parseInt(args[1]);
+          }
+          message.reply(`✅ Auto-attack enabled with radius ${autoAttackRadius} blocks`);
+        } else if (args[0] === 'off') {
+          autoAttackEnabled = false;
+          message.reply('✅ Auto-attack disabled');
+        } else {
+          message.reply('Usage: !mc autoattack <on|off> [radius]');
         }
         break;
 
@@ -896,7 +1101,12 @@ console.log('Disconnecting from the Minecraft server...');
             { name: '!mc time', value: 'Show the current time in the Minecraft world' },
             { name: '!mc weather', value: 'Show the current weather in the Minecraft world' },
             { name: '!mc help', value: 'Show this help message' },
-            { name: '!mc rules', value: 'Display server rules and guidelines (Restricted)' }
+            { name: '!mc rules', value: 'Display server rules and guidelines (Restricted)' },
+            { name: '!mc follow <player>', value: 'Make the bot follow a specific player' },
+            { name: '!mc stopfollow', value: 'Stop following a player' },
+            { name: '!mc attack <mob>', value: 'Attack a specific type of mob nearby (Admin only)' },
+            { name: '!mc autoattack <on|off> [radius]', value: 'Toggle automatic hostile mob detection and combat (Admin only)' },
+            { name: '!mc comehere <player>', value: 'Teleport a player to the bot (Admin only)' }
           )
           .addFields({
             name: 'Admin Commands',
