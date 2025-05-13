@@ -603,61 +603,67 @@ client.on('messageCreate', async (message) => {
         break;
 
       case 'follow':
-        // Check if user has permission
-        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
-          try {
-            const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
-            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
-          } catch (error) {
-            console.error('Failed to send error message:', error);
+          // Check if user has permission
+          if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+            try {
+              const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+              setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+            } catch (error) {
+              console.error('Failed to send error message:', error);
+            }
+            return;
           }
-          return;
-        }
-
-        if (!args[0]) {
-          return message.reply('Please specify a player to follow. Usage: !mc follow <player>');
-        }
-
-        // Check if the player exists in the game with partial matching
-        const targetPlayerName = args[0];
-        const playerList = Object.keys(bot.players);
-        const playerMatch = playerList.find(name => 
-          name.toLowerCase() === targetPlayerName.toLowerCase() ||
-          name.toLowerCase().includes(targetPlayerName.toLowerCase())
-        );
-        
-        if (!playerMatch) {
-          return message.reply(`Player matching "${targetPlayerName}" not found. Available players: ${playerList.join(', ')}`);
-        }
-        
-        const playerToFollow = bot.players[playerMatch];
-        if (!playerToFollow || !playerToFollow.entity) {
-          return message.reply(`Player ${playerMatch} is online but not in visible range. They need to be nearby.`);
-        }
-
-        try {
-          // Clear any existing goals
-          bot.pathfinder.setGoal(null);
-          
-          // Get the current mcData and set up movements
-          const mcData = require('minecraft-data')(bot.version);
-          const movements = new Movements(bot, mcData);
-          movements.canDig = false; // Don't dig in SMP
-          bot.pathfinder.setMovements(movements);
-          
-          // Set goal to follow the player with a distance of 2 blocks
-          const followGoal = new goals.GoalFollow(playerToFollow.entity, 2);
-          bot.pathfinder.setGoal(followGoal, true); // true = dynamic goal that updates with player movement
-          
-          message.reply(`✅ Now following ${playerMatch}`);
-          
-          // Send a message in-game to notify the player
-          bot.chat(`I'm now following ${playerMatch}`);
-        } catch (error) {
-          console.error('Pathfinding error:', error);
-          message.reply(`❌ Error following player: ${error.message}`);
-        }
-        break;
+      
+          if (!args[0]) {
+            return message.reply('Please specify a player to follow. Usage: !mc follow <player>');
+          }
+      
+          const playerToFollow = args[0];
+          try {
+            const targetPlayer = bot.players[playerToFollow];
+            if (!targetPlayer) {
+              return message.reply(`Player ${playerToFollow} not found.`);
+            }
+      
+            const pathfinder = require('mineflayer-pathfinder');
+            const { GoalFollow } = pathfinder.goals;
+            bot.pathfinder.setGoal(new GoalFollow(targetPlayer.entity, 1));
+            message.react('✅');
+          } catch (error) {
+            console.error('Failed to follow player:', error);
+            message.reply(`❌ Error following player: ${error.message}`);
+          }
+          break;
+      
+      case 'setviewdistance':
+          // Check if user has permission
+          if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+            try {
+              const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+              setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+            } catch (error) {
+              console.error('Failed to send error message:', error);
+            }
+            return;
+          }
+      
+          if (!args[0]) {
+            return message.reply('Please specify a view distance. Usage: !mc setviewdistance <distance>');
+          }
+      
+          const viewDistance = parseInt(args[0], 10);
+          if (isNaN(viewDistance) || viewDistance < 2 || viewDistance > 32) {
+            return message.reply('Invalid view distance. Please specify a number between 2 and 32.');
+          }
+      
+          try {
+            bot.settings.viewDistance = viewDistance;
+            message.react('✅');
+          } catch (error) {
+            console.error('Failed to set view distance:', error);
+            message.reply(`❌ Error setting view distance: ${error.message}`);
+          }
+          break;
 
       case 'attack':
         // Check if user has permission
