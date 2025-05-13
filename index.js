@@ -574,96 +574,81 @@ client.on('messageCreate', async (message) => {
 
         // Check if the player exists in the game
         const playerNameToTeleport = args[0];
-        const targetPlayer = Object.values(bot.players).find(p => p.username.toLowerCase() === playerNameToTeleport.toLowerCase());
-        
-        if (!targetPlayer) {
-          return message.reply(`Player ${playerNameToTeleport} is not online.`);
+const targetPlayerToTeleport = Object.values(bot.players).find(p => p.username.toLowerCase() === playerNameToTeleport.toLowerCase());
+
+if (!targetPlayerToTeleport) {
+  return message.reply(`Player ${playerNameToTeleport} is not online.`);
+}
+
+if (!targetPlayerToTeleport.entity) {
+  return message.reply(`Cannot locate ${playerNameToTeleport}'s position. They might be too far away.`);
+}
+
+try {
+  // Initialize pathfinder movements
+  const mcData = require('minecraft-data')(bot.version);
+  const movements = new Movements(bot, mcData);
+  bot.pathfinder.setMovements(movements);
+
+  // Set goal to move to player
+  const goal = new goals.GoalNear(targetPlayerToTeleport.entity.position.x, targetPlayerToTeleport.entity.position.y, targetPlayerToTeleport.entity.position.z, 1);
+
+  // Start pathfinding
+  await bot.pathfinder.goto(goal);
+  message.channel.send(`✅ Successfully moved to ${playerNameToTeleport}'s location.`);
+} catch (error) {
+  console.error('Pathfinding error:', error);
+  message.channel.send(`❌ Failed to reach ${playerNameToTeleport}'s location: ${error.message}`);
+}
+break;
+
+case 'follow':
+if (!args[0]) {
+  return message.reply('Please specify a player to follow. Usage: !mc follow <player>');
+}
+
+const playerNameToFollow = args[0];
+const targetPlayerToFollow = bot.players[playerNameToFollow];
+if (!targetPlayerToFollow || !targetPlayerToFollow.entity) {
+  return message.reply(`Cannot locate ${playerNameToFollow}'s position. They might be too far away or not online.`);
+}
+
+bot.pathfinder.setGoal(new GoalFollow(targetPlayerToFollow.entity, 1));
+message.react('✅');
+break;
+
+      case 'comehere':
+        if (!args[0]) {
+          return message.reply('Please specify a player to teleport to. Usage: !mc comehere <player>');
         }
 
-        if (!targetPlayer.entity) {
-          return message.reply(`Cannot locate ${playerNameToTeleport}'s position. They might be too far away.`);
+        const playerToTeleport = bot.players[args[0]];
+        if (!playerToTeleport || !playerToTeleport.entity) {
+          return message.reply(`Cannot locate ${args[0]}'s position. They might be too far away or not online.`);
+        }
+
+        bot.chat(`/tp ${args[0]} ${bot.username}`);
+        message.react('✅');
+        break;
+
+      case 'setviewdistance':
+        if (!args[0]) {
+          return message.reply('Please specify a view distance. Usage: !mc setviewdistance <distance>');
+        }
+
+        const viewDistance = parseInt(args[0], 10);
+        if (isNaN(viewDistance) || viewDistance < 2 || viewDistance > 32) {
+          return message.reply('Invalid view distance. Please specify a number between 2 and 32.');
         }
 
         try {
-          // Initialize pathfinder movements
-          const mcData = require('minecraft-data')(bot.version);
-          const movements = new Movements(bot, mcData);
-          bot.pathfinder.setMovements(movements);
-
-          // Set goal to move to player
-          const goal = new goals.GoalNear(targetPlayer.entity.position.x, targetPlayer.entity.position.y, targetPlayer.entity.position.z, 1);
-          
-          // Start pathfinding
-          await bot.pathfinder.goto(goal);
-          message.channel.send(`✅ Successfully moved to ${playerNameToTeleport}'s location.`);
+          bot.settings.viewDistance = viewDistance;
+          message.react('✅');
         } catch (error) {
-          console.error('Pathfinding error:', error);
-          message.channel.send(`❌ Failed to reach ${playerNameToTeleport}'s location: ${error.message}`);
+          console.error('Failed to set view distance:', error);
+          message.reply(`❌ Error setting view distance: ${error.message}`);
         }
         break;
-
-      case 'follow':
-          // Check if user has permission
-          if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
-            try {
-              const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
-              setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
-            } catch (error) {
-              console.error('Failed to send error message:', error);
-            }
-            return;
-          }
-      
-          if (!args[0]) {
-            return message.reply('Please specify a player to follow. Usage: !mc follow <player>');
-          }
-      
-          const playerToFollow = args[0];
-          try {
-            const targetPlayer = bot.players[playerToFollow];
-            if (!targetPlayer) {
-              return message.reply(`Player ${playerToFollow} not found.`);
-            }
-      
-            const pathfinder = require('mineflayer-pathfinder');
-            const { GoalFollow } = pathfinder.goals;
-            bot.pathfinder.setGoal(new GoalFollow(targetPlayer.entity, 1));
-            message.react('✅');
-          } catch (error) {
-            console.error('Failed to follow player:', error);
-            message.reply(`❌ Error following player: ${error.message}`);
-          }
-          break;
-      
-      case 'setviewdistance':
-          // Check if user has permission
-          if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
-            try {
-              const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
-              setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
-            } catch (error) {
-              console.error('Failed to send error message:', error);
-            }
-            return;
-          }
-      
-          if (!args[0]) {
-            return message.reply('Please specify a view distance. Usage: !mc setviewdistance <distance>');
-          }
-      
-          const viewDistance = parseInt(args[0], 10);
-          if (isNaN(viewDistance) || viewDistance < 2 || viewDistance > 32) {
-            return message.reply('Invalid view distance. Please specify a number between 2 and 32.');
-          }
-      
-          try {
-            bot.settings.viewDistance = viewDistance;
-            message.react('✅');
-          } catch (error) {
-            console.error('Failed to set view distance:', error);
-            message.reply(`❌ Error setting view distance: ${error.message}`);
-          }
-          break;
 
       case 'attack':
         // Check if user has permission
