@@ -9,6 +9,7 @@ const https = require('https');
 const MC_CHAT_CHANNEL = 'minecraft-chat';
 const RENDER_URL = 'https://smp-bot-8k1e.onrender.com';
 const PING_INTERVAL = 2 * 60 * 1000; // 2 minutes
+const AUTHORIZED_USER_IDS = ['724265072364617759', '498447966252695552']; // Admin user IDs
 let lastHealthCheck = Date.now();
 let isServerOnline = false;
 
@@ -53,7 +54,7 @@ const initMinecraftBot = () => {
     plugins: [pathfinder],
     host: process.env.MC_HOST || 'in02.servoid.pro',
     port: parseInt(process.env.MC_PORT || '8641'),
-    username: 'Havaldaar',
+    username: 'Disaster',
     auth: 'offline',
     version: process.env.MC_VERSION || false,
     hideErrors: true,
@@ -350,6 +351,12 @@ const initMinecraftBot = () => {
 
 // Update Discord bot status based on Minecraft server status
 function updateBotStatus() {
+  // Check if client.user exists before trying to update status
+  if (!client.user) {
+    console.log('Discord client not fully initialized yet, skipping status update');
+    return;
+  }
+  
   if (isServerOnline) {
     client.user.setActivity('Minecraft Server Online', { type: ActivityType.Watching });
     client.user.setStatus('online');
@@ -436,7 +443,7 @@ client.on('messageCreate', async (message) => {
   // Handle tell command as it works in any channel
   if (message.content.startsWith('!mc tell')) {
     // Check if user has permission
-    if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+    if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
       try {
         const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
         setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
@@ -490,7 +497,7 @@ client.on('messageCreate', async (message) => {
     
     if (command === 'rules') {
       // Check if user has permission
-      if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+      if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
         try {
           const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
           setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
@@ -616,7 +623,7 @@ client.on('messageCreate', async (message) => {
 
       case 'say':
         // Check if user has permission
-        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+        if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
           try {
             const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
             setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
@@ -744,7 +751,7 @@ client.on('messageCreate', async (message) => {
 
       case 'comehere':
         // Check if user has permission
-        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+        if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
           try {
             const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
             setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
@@ -899,6 +906,17 @@ case 'stopfollow':
   break;
 
       case 'comehere':
+        // Check if user has permission
+        if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
+          try {
+            const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+          } catch (error) {
+            console.error('Failed to send error message:', error);
+          }
+          return;
+        }
+
         if (!args[0]) {
           return message.reply('Please specify a player to teleport to. Usage: !mc comehere <player>');
         }
@@ -1011,7 +1029,7 @@ case 'stopfollow':
 
       case 'comehere':
         // Check if user has permission
-        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+        if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
           try {
             const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
             setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
@@ -1248,12 +1266,8 @@ console.log('Disconnecting from the Minecraft server...');
             { name: '!mc time', value: 'Show the current time in the Minecraft world' },
             { name: '!mc weather', value: 'Show the current weather in the Minecraft world' },
             { name: '!mc help', value: 'Show this help message' },
-            { name: '!mc rules', value: 'Display server rules and guidelines (Restricted)' },
-            { name: '!mc follow <player>', value: 'Make the bot follow a specific player' },
-            { name: '!mc stopfollow', value: 'Stop following a player' },
-            { name: '!mc attack <mob>', value: 'Attack a specific type of mob nearby (Admin only)' },
-            { name: '!mc autoattack <on|off> [radius]', value: 'Toggle automatic hostile mob detection and combat (Admin only)' },
-            { name: '!mc comehere <player>', value: 'Teleport a player to the bot (Admin only)' }
+            { name: '!mc rules', value: 'Display server rules and guidelines (Restricted)' }
+            
           )
           .addFields({
             name: 'Admin Commands',
