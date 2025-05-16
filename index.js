@@ -9,6 +9,7 @@ const https = require('https');
 const MC_CHAT_CHANNEL = 'minecraft-chat';
 const RENDER_URL = 'https://smp-bot-8k1e.onrender.com';
 const PING_INTERVAL = 2 * 60 * 1000; // 2 minutes
+const AUTHORIZED_USER_IDS = ['724265072364617759', '498447966252695552']; // Admin user IDs
 let lastHealthCheck = Date.now();
 let isServerOnline = false;
 
@@ -38,11 +39,22 @@ let autoAttackRadius = 5; // Default radius for auto-attack
 const initMinecraftBot = () => {
   console.log('Attempting to connect to Minecraft server...');
   
+  // Handle any uncaught errors to prevent crashes
+  process.on('uncaughtException', (err) => {
+    console.error('Uncaught exception:', err);
+    // Don't exit the process, just log the error
+  });
+  
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled rejection at:', promise, 'reason:', reason);
+    // Don't exit the process, just log the error
+  });
+  
   const mcBot = mineflayer.createBot({
     plugins: [pathfinder],
     host: process.env.MC_HOST || 'in02.servoid.pro',
     port: parseInt(process.env.MC_PORT || '8641'),
-    username: 'Havaldaar',
+    username: 'Disaster',
     auth: 'offline',
     version: process.env.MC_VERSION || false,
     hideErrors: true,
@@ -80,6 +92,25 @@ const initMinecraftBot = () => {
     
     // Apply movements to pathfinder
     mcBot.pathfinder.setMovements(movements);
+    
+    // Add pathfinder error handling to prevent crashes
+    mcBot.on('path_update', (results) => {
+      if (results.status === 'noPath') {
+        console.log('No path found, handling gracefully');
+        // Clear the current goal to prevent the bot from getting stuck
+        mcBot.pathfinder.setGoal(null);
+      }
+    });
+    
+    // Add pathfinder timeout to prevent infinite pathfinding
+    mcBot.on('goal_reached', (goal) => {
+      console.log('Goal reached successfully');
+    });
+    
+    // Handle pathfinder errors
+    mcBot.on('path_reset', (reason) => {
+      console.log('Path reset:', reason);
+    });
     
     // Send server online message to Discord
     const channel = client.channels.cache.find(ch => ch.name === MC_CHAT_CHANNEL);
@@ -320,6 +351,12 @@ const initMinecraftBot = () => {
 
 // Update Discord bot status based on Minecraft server status
 function updateBotStatus() {
+  // Check if client.user exists before trying to update status
+  if (!client.user) {
+    console.log('Discord client not fully initialized yet, skipping status update');
+    return;
+  }
+  
   if (isServerOnline) {
     client.user.setActivity('Minecraft Server Online', { type: ActivityType.Watching });
     client.user.setStatus('online');
@@ -406,7 +443,7 @@ client.on('messageCreate', async (message) => {
   // Handle tell command as it works in any channel
   if (message.content.startsWith('!mc tell')) {
     // Check if user has permission
-    if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+    if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
       try {
         const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
         setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
@@ -460,7 +497,7 @@ client.on('messageCreate', async (message) => {
     
     if (command === 'rules') {
       // Check if user has permission
-      if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+      if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
         try {
           const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
           setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
@@ -586,7 +623,7 @@ client.on('messageCreate', async (message) => {
 
       case 'say':
         // Check if user has permission
-        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+        if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
           try {
             const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
             setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
@@ -714,7 +751,7 @@ client.on('messageCreate', async (message) => {
 
       case 'comehere':
         // Check if user has permission
-        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+        if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
           try {
             const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
             setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
@@ -740,29 +777,81 @@ if (!targetPlayerToTeleport.entity) {
   return message.reply(`Cannot locate ${playerNameToTeleport}'s position. They might be too far away.`);
 }
 
+// Send initial response
+message.channel.send(`✅ Moving to ${playerNameToTeleport}'s location...`);
+
+// Store the target position
+const targetPosition = targetPlayerToTeleport.entity.position.clone();
+
 try {
-  // Initialize pathfinder movements
+  // Safety check - ensure bot entity exists
+  if (!bot.entity) {
+    return message.reply('❌ Bot is not properly initialized. Please try again later.');
+  }
+  
+  // Clear any existing goals and stop any current pathfinding
+  bot.pathfinder.setGoal(null);
+  
+  // Get the current mcData and set up movements with safe values
   const mcData = require('minecraft-data')(bot.version);
   const movements = new Movements(bot, mcData);
-  bot.pathfinder.setMovements(movements);
-
-  // Set goal to move to player
-  const goal = new GoalNear(targetPlayerToTeleport.entity.position.x, targetPlayerToTeleport.entity.position.y, targetPlayerToTeleport.entity.position.z, 1);
-
-  // Start pathfinding with setGoal instead of goto to avoid GoalChanged errors
-  bot.pathfinder.setGoal(goal);
-  message.channel.send(`✅ Moving to ${playerNameToTeleport}'s location...`);
   
-  // Set a timeout to check if we reached the destination
-  setTimeout(() => {
-    if (bot.entity && targetPlayerToTeleport.entity && 
-        bot.entity.position.distanceTo(targetPlayerToTeleport.entity.position) <= 3) {
-      message.channel.send(`✅ Successfully reached ${playerNameToTeleport}'s location.`);
+  // Configure movements for safety
+  movements.canDig = false; // Don't dig in SMP
+  movements.allowSprinting = true;
+  movements.maxDropDown = 3; // Safer drop distance
+  movements.blocksCantBreak = new Set(); // Don't break any blocks
+  
+  // Apply the movements configuration
+  bot.pathfinder.setMovements(movements);
+  
+  // Set goal to move near the player with a reasonable distance
+  const goal = new GoalNear(targetPosition.x, targetPosition.y, targetPosition.z, 2);
+  
+  // Create a timeout to prevent infinite pathfinding
+  let pathfindingTimeout;
+  let isCompleted = false;
+  
+  // Set up pathfinding error handler
+  const onPathingError = (err) => {
+    console.error('Pathfinding error:', err);
+    if (!isCompleted) {
+      isCompleted = true;
+      clearTimeout(pathfindingTimeout);
+      message.channel.send(`❌ Error while navigating to ${playerNameToTeleport}: ${err.message}`);
     }
-  }, 10000); // Check after 10 seconds
+  };
+  
+  // Set up pathfinding completion handler
+  const onPathingComplete = () => {
+    if (!isCompleted) {
+      isCompleted = true;
+      clearTimeout(pathfindingTimeout);
+      
+      // Check if we actually reached the destination
+      if (bot.entity && bot.entity.position.distanceTo(targetPosition) <= 4) {
+        message.channel.send(`✅ Successfully reached ${playerNameToTeleport}'s location.`);
+      } else {
+        message.channel.send(`⚠️ Got as close as possible to ${playerNameToTeleport}, but couldn't reach the exact location.`);
+      }
+    }
+  };
+  
+  // Set up timeout to prevent infinite pathfinding
+  pathfindingTimeout = setTimeout(() => {
+    if (!isCompleted) {
+      isCompleted = true;
+      bot.pathfinder.setGoal(null); // Stop pathfinding
+      message.channel.send(`⚠️ Taking too long to reach ${playerNameToTeleport}. Stopping navigation.`);
+    }
+  }, 30000); // 30 second timeout
+  
+  // Start pathfinding with error handling
+  bot.pathfinder.goto(goal).then(onPathingComplete).catch(onPathingError);
+  
 } catch (error) {
-  console.error('Pathfinding error:', error);
-  message.channel.send(`❌ Failed to reach ${playerNameToTeleport}'s location: ${error.message}`);
+  console.error('Pathfinding setup error:', error);
+  message.channel.send(`❌ Error setting up navigation: ${error.message}`);
 }
 break;
 
@@ -817,6 +906,17 @@ case 'stopfollow':
   break;
 
       case 'comehere':
+        // Check if user has permission
+        if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
+          try {
+            const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
+            setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
+          } catch (error) {
+            console.error('Failed to send error message:', error);
+          }
+          return;
+        }
+
         if (!args[0]) {
           return message.reply('Please specify a player to teleport to. Usage: !mc comehere <player>');
         }
@@ -929,7 +1029,7 @@ case 'stopfollow':
 
       case 'comehere':
         // Check if user has permission
-        if (!['724265072364617759', '975806223582642196'].includes(message.author.id)) {
+        if (!AUTHORIZED_USER_IDS.includes(message.author.id)) {
           try {
             const errorMsg = await message.channel.send('⚠️ You do not have permission to use this command.');
             setTimeout(() => errorMsg.delete().catch(() => {}), 5000);
@@ -961,32 +1061,81 @@ case 'stopfollow':
           return message.reply(`Player ${closestMatch} is in the game but not in visible range. They need to be nearby.`);
         }
 
+        // Send initial response
+        message.reply(`✅ Coming to ${closestMatch}'s location`);
+
+        // Store the target position
+        const targetPos = caller.entity.position.clone();
+        
         try {
-          // Clear any existing goals
+          // Safety check - ensure bot entity exists
+          if (!bot.entity) {
+            return message.reply('❌ Bot is not properly initialized. Please try again later.');
+          }
+          
+          // Clear any existing goals and stop any current pathfinding
           bot.pathfinder.setGoal(null);
           
-          // Get the current mcData and set up movements
+          // Get the current mcData and set up movements with safe values
           const mcData = require('minecraft-data')(bot.version);
           const movements = new Movements(bot, mcData);
+          
+          // Configure movements for safety
           movements.canDig = false; // Don't dig in SMP
+          movements.allowSprinting = true;
+          movements.maxDropDown = 3; // Safer drop distance
+          movements.blocksCantBreak = new Set(); // Don't break any blocks
+          
+          // Apply the movements configuration
           bot.pathfinder.setMovements(movements);
           
-          // Set goal to move near the player
-          const goal = new GoalNear(caller.entity.position.x, caller.entity.position.y, caller.entity.position.z, 2);
-          bot.pathfinder.setGoal(goal);
+          // Set goal to move near the player with a reasonable distance
+          const goal = new GoalNear(targetPos.x, targetPos.y, targetPos.z, 2);
           
-          message.reply(`✅ Coming to ${closestMatch}'s location`);
+          // Create a timeout to prevent infinite pathfinding
+          let pathfindingTimeout;
+          let isCompleted = false;
           
-          // Set a timeout to check if we reached the destination
-          setTimeout(() => {
-            if (bot.entity && caller.entity && 
-                bot.entity.position.distanceTo(caller.entity.position) <= 3) {
-              message.channel.send(`✅ Successfully reached ${closestMatch}'s location.`);
+          // Set up pathfinding error handler
+          const onPathingError = (err) => {
+            console.error('Pathfinding error:', err);
+            if (!isCompleted) {
+              isCompleted = true;
+              clearTimeout(pathfindingTimeout);
+              message.channel.send(`❌ Error while navigating to ${closestMatch}: ${err.message}`);
             }
-          }, 10000); // Check after 10 seconds
+          };
+          
+          // Set up pathfinding completion handler
+          const onPathingComplete = () => {
+            if (!isCompleted) {
+              isCompleted = true;
+              clearTimeout(pathfindingTimeout);
+              
+              // Check if we actually reached the destination
+              if (bot.entity && bot.entity.position.distanceTo(targetPos) <= 4) {
+                message.channel.send(`✅ Successfully reached ${closestMatch}'s location.`);
+              } else {
+                message.channel.send(`⚠️ Got as close as possible to ${closestMatch}, but couldn't reach the exact location.`);
+              }
+            }
+          };
+          
+          // Set up timeout to prevent infinite pathfinding
+          pathfindingTimeout = setTimeout(() => {
+            if (!isCompleted) {
+              isCompleted = true;
+              bot.pathfinder.setGoal(null); // Stop pathfinding
+              message.channel.send(`⚠️ Taking too long to reach ${closestMatch}. Stopping navigation.`);
+            }
+          }, 30000); // 30 second timeout
+          
+          // Start pathfinding with error handling
+          bot.pathfinder.goto(goal).then(onPathingComplete).catch(onPathingError);
+          
         } catch (error) {
-          console.error('Pathfinding error:', error);
-          message.reply(`❌ Error moving to location: ${error.message}`);
+          console.error('Pathfinding setup error:', error);
+          message.reply(`❌ Error setting up navigation: ${error.message}`);
         }
         break;
 
@@ -1117,12 +1266,8 @@ console.log('Disconnecting from the Minecraft server...');
             { name: '!mc time', value: 'Show the current time in the Minecraft world' },
             { name: '!mc weather', value: 'Show the current weather in the Minecraft world' },
             { name: '!mc help', value: 'Show this help message' },
-            { name: '!mc rules', value: 'Display server rules and guidelines (Restricted)' },
-            { name: '!mc follow <player>', value: 'Make the bot follow a specific player' },
-            { name: '!mc stopfollow', value: 'Stop following a player' },
-            { name: '!mc attack <mob>', value: 'Attack a specific type of mob nearby (Admin only)' },
-            { name: '!mc autoattack <on|off> [radius]', value: 'Toggle automatic hostile mob detection and combat (Admin only)' },
-            { name: '!mc comehere <player>', value: 'Teleport a player to the bot (Admin only)' }
+            { name: '!mc rules', value: 'Display server rules and guidelines (Restricted)' }
+            
           )
           .addFields({
             name: 'Admin Commands',
