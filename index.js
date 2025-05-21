@@ -54,7 +54,7 @@ const initMinecraftBot = () => {
     plugins: [pathfinder],
     host: process.env.MC_HOST || 'in02.servoid.pro',
     port: parseInt(process.env.MC_PORT || '8641'),
-    username: 'Havaldaar',
+    username: process.env.BOT_NAME || 'Havaldaar',
     auth: 'offline',
     version: process.env.MC_VERSION || false,
     hideErrors: true,
