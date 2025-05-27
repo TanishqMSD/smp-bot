@@ -7,7 +7,7 @@ const https = require('https');
 
 // Configuration constants
 const MC_CHAT_CHANNEL = 'minecraft-chat';
-const RENDER_URL = 'https://smp-bot-8k1e.onrender.com';
+const RENDER_URL = 'https://smp-bot-8yap.onrender.com';
 const PING_INTERVAL = 2 * 60 * 1000; // 2 minutes
 const AUTHORIZED_USER_IDS = ['724265072364617759', '975806223582642196']; // Admin user IDs
 let lastHealthCheck = Date.now();
